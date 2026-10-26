@@ -142,7 +142,7 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: '*', 
-    methods: ['POST']
+    methods: ['GET', 'POST']
 }));
 
 // Reusable Transporter Setup
@@ -153,6 +153,9 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
   tls: { rejectUnauthorized: false }
 });
+
+// --- AI VOICE / VIDEO CALLS (chatbot) ---
+require('./aiCall')(app, transporter);
 
 
 // --- 1. CONTACT PAGE ENDPOINT ---
