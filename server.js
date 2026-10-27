@@ -154,8 +154,8 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 });
 
-// --- AI VOICE / VIDEO CALLS (chatbot) ---
-require('./aiCall')(app, transporter);
+// --- AI VOICE / VIDEO CALLS (chatbot, via Tavus) ---
+require('./tavusCall')(app, transporter);
 
 
 // --- 1. CONTACT PAGE ENDPOINT ---
