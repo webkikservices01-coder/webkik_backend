@@ -1,20 +1,21 @@
 // Live AI voice / video calls from the chatbot on webkik.co.in, powered by Tavus (tavus.io).
 //
 // The browser never sees the Tavus key. This file:
-//   1. finds (or creates once) the "Webkik AI" PAL on Tavus and starts a conversation with it,
-//      with the Webkik facts sent as conversational context,
-//   2. hands the browser only the conversation link, which it opens in an iframe,
+//   1. starts a conversation with the "Webkik AI" PAL (made by tavusSetup.js), sending everything
+//      in webkikKnowledge.js as conversational context,
+//   2. hands the browser only the conversation link, which it joins with Daily,
 //   3. ends the conversation when the visitor hangs up, so no minutes are wasted,
-//   4. emails the call transcript to Webkik when Tavus sends it (that is how call leads arrive).
+//   4. emails Webkik a lead when the AI calls save_lead, and the transcript after every call.
 //
 // Env: TAVUS_API_KEY (required), TAVUS_FACE_ID, TAVUS_PAL_ID, AI_CALL_MAX_SECONDS,
 //      AI_CALL_PER_IP_PER_DAY, AI_CALL_ORIGINS (comma-separated), PUBLIC_URL.
 
 const crypto = require('crypto');
+const WEBKIK_FACTS = require('./webkikKnowledge');
 
 const TAVUS = 'https://tavusapi.com/v2';
 const PAL_NAME = 'Webkik AI';
-const FACE_ID = process.env.TAVUS_FACE_ID || 'rc9cff32ceba'; // Tavus stock face "Anna"
+const FACE_ID = process.env.TAVUS_FACE_ID || 'r4dc9377a68e'; // Tavus stock face "Priya - Office"
 const MAX_SECONDS = Math.max(60, Math.min(1800, Number(process.env.AI_CALL_MAX_SECONDS) || 300));
 const PER_IP_PER_DAY = Math.max(1, Number(process.env.AI_CALL_PER_IP_PER_DAY) || 6);
 const ORIGINS = (process.env.AI_CALL_ORIGINS || 'https://webkik.co.in,https://www.webkik.co.in,http://localhost:5173,http://localhost:4173')
@@ -54,53 +55,17 @@ const tavus = async (path, method = 'GET', body) => {
   return data;
 };
 
-const PAL_PROMPT = `You are Webkik AI, the friendly female AI assistant of Webkik Services (webkik.co.in), a digital agency in New Delhi, India. You are on a live call with a visitor of the Webkik website.
-- Speak naturally in 1 to 3 short sentences, then let the caller talk. No lists, no markdown, no emojis.
-- Language: Hinglish by default (the natural mix of Hindi and English Indians use on calls). If the caller speaks only English, reply in simple Indian English; if only Hindi, reply in Hindi. In Hindi use feminine forms ("main bata sakti hoon").
-- Understand what they need (type of business, what they want built or improved, timeline, budget if they share it).
-- When they want a quote, a callback or to work with Webkik, ask for their name and phone or WhatsApp number, and repeat them back once. Tell them the Webkik team will call them back soon.
-- To book a consultation or chat on WhatsApp, tell them to tap the "Book a call" or "WhatsApp" button below the call.
-- Never invent prices or facts. If you do not know something, say the team will confirm.
-- You are an AI assistant, not a human. If asked, say so honestly. If they say bye, say a short goodbye.
-- In video calls you may see the caller's camera. Use it only when it helps (they show a website, design or product). Never comment on the caller's looks or guess who they are.`;
-
-// Sent with every conversation, so these facts can change without touching the PAL on Tavus.
-const WEBKIK_FACTS = `ABOUT WEBKIK
-- Founded in 2015 by Shubham Khurana (Founder and Director). 30+ projects delivered for clients in India, USA, UAE, Australia and UK.
-- Office: WZ-52, Second Floor, Near Pillar No-432, Tagore Garden, New Delhi 110027.
-- Phone and WhatsApp: +91 98686 98698. Email: hello@webkik.co.in.
-- Hours: Monday to Friday 9:30 am to 6:30 pm, Saturday 10 am to 3 pm.
-
-SERVICES
-- Website design and development: React, Next.js, Node.js, WordPress, Shopify. Landing pages and e-commerce stores.
-- UI/UX design for websites and apps: research, wireframes, prototypes, design systems.
-- Mobile apps: native iOS and Android, and cross-platform with React Native and Flutter.
-- AI solutions: AI chatbots (support, lead generation, WhatsApp), AI agents that automate business work, AI-powered websites, AI video and illustrations.
-- SEO: technical SEO, on-page SEO, local SEO, and AEO/GEO (showing up in AI answers).
-- Performance marketing: Google Ads and Meta Ads, focused on leads, ROAS and profit.
-- Social media marketing: Instagram, LinkedIn and YouTube content and strategy.
-- Branding and logo design, creative and motion graphics.
-- Portfolio includes websites for interior design and architecture firms (Essentia Environments, Renascent Consultants), restaurants, jewellery and fashion stores, clinics and more.
-- Clients get full ownership of source code and design files after final payment. A standard business website usually takes 2 to 4 weeks.
-
-PRICING
-- Webkik has no fixed public prices: cost depends on scope. Never invent a price. Offer a callback with a quote, or a free consultation call.`;
-
-const GREETING = 'Hi! Main Webkik ki AI assistant hoon. Aapke business ke liye kya banana chahte hain?';
+const GREETING = 'Hi! Main Priya hoon, Webkik ki AI assistant. Bataiye, aapke business ke liye kya banana chahte hain?';
+const leadsByIp = new Map();
+const clean = (v, max) => String(v ?? '').replace(/[<>]/g, '').trim().slice(0, max);
 
 let palId = process.env.TAVUS_PAL_ID || null;
 async function getPalId() {
   if (palId) return palId;
   const list = await tavus('/pals?limit=100&pal_type=user');
   const found = (list.data || []).find((p) => (p.pal_name || p.persona_name) === PAL_NAME);
-  if (found) return (palId = found.pal_id || found.persona_id);
-  const made = await tavus('/pals', 'POST', {
-    pal_name: PAL_NAME,
-    pipeline_mode: 'full',
-    system_prompt: PAL_PROMPT,
-    default_face_id: FACE_ID,
-  });
-  return (palId = made.pal_id || made.persona_id);
+  if (!found) throw new Error('No "Webkik AI" PAL on Tavus: run node tavusSetup.js');
+  return (palId = found.pal_id || found.persona_id);
 }
 
 const publicUrl = (req) => process.env.PUBLIC_URL || `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
@@ -165,6 +130,48 @@ module.exports = function tavusCall(app, transporter) {
     } catch (err) {
       console.error('AI call end error:', err.message);
       res.json({ ok: false }); // Tavus also ends it on its own after participant_left_timeout
+    }
+  });
+
+  // POST /api/ai-call/tool/save_lead?k=... -- Tavus calls this when the AI runs save_lead during a call.
+  app.post('/api/ai-call/tool/save_lead', async (req, res) => {
+    if (!process.env.TAVUS_API_KEY || req.query.k !== hookKey()) return res.status(403).json({ msg: 'Not allowed.' });
+    const b = req.body || {};
+    const lead = {
+      name: clean(b.name, 80),
+      phone: clean(b.phone, 30),
+      email: clean(b.email, 120),
+      company: clean(b.company, 120),
+      requirement: clean(b.requirement, 1000),
+      preferred_time: clean(b.preferred_time, 120),
+    };
+    if (!lead.name || !lead.phone) return res.json({ ok: false, error: 'Name and phone number are needed. Ask the caller for them.' });
+    if (!bump(leadsByIp, lead.phone, 3)) return res.json({ ok: true, note: 'These details were already sent to the team.' });
+    try {
+      const rows = [
+        ['Name', lead.name],
+        ['Phone / WhatsApp', lead.phone],
+        ['Email', lead.email],
+        ['Company', lead.company],
+        ['Requirement', lead.requirement],
+        ['Preferred time', lead.preferred_time],
+      ].filter(([, v]) => v);
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: process.env.CONTACT_RECEIVER,
+        replyTo: lead.email || undefined,
+        subject: `📞 New Lead from AI call: ${lead.name}${lead.company ? ` from ${lead.company}` : ''}`,
+        html: `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto">
+          <div style="background:#ea0b60;color:#fff;padding:20px;border-radius:10px 10px 0 0"><h2 style="margin:0">Lead from the AI call</h2></div>
+          <table style="width:100%;border-collapse:collapse;background:#fff">${rows
+            .map(([k, v]) => `<tr><td style="padding:10px;border-bottom:1px solid #eee;color:#666;width:160px">${k}</td><td style="padding:10px;border-bottom:1px solid #eee"><b>${esc(v)}</b></td></tr>`)
+            .join('')}</table>
+          <p style="color:#888;font-size:12px">Noted by Webkik AI during a live call on webkik.co.in. Call them back soon.</p></div>`,
+      });
+      res.json({ ok: true, sent_to_webkik_team: true });
+    } catch (err) {
+      console.error('AI call lead error:', err.message);
+      res.json({ ok: false, error: 'Could not send right now. Offer WhatsApp instead with open_whatsapp.' });
     }
   });
 
