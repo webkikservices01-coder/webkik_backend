@@ -9,10 +9,13 @@ module.exports = `ABOUT WEBKIK SERVICES
 - Numbers on the website: 500+ projects delivered, 250+ global clients, 18+ countries served, 10+ years, 10+ expert team members, 4.8 star Google rating, 98% client satisfaction.
 - Clients in India, USA, UAE, Australia, UK and more.
 
-TEAM (from the About Us page)
+TEAM
 - Shubham Khurana: CEO and Founder (Founder and Director). Founded Webkik in 2015.
-- Leadership: Harsh Gupta (Full Stack Developer), Gulshan Sagar (SEO Specialist).
-- Team: Ajay (CMS Developer), Shiva Gupta (Full Stack Developer), Sujal Marcus (Senior Designer), Saloni (SEO Specialist).
+- Harsh Gupta: Full Stack Developer.
+- Gulshan Sagar: SEO Specialist.
+- These three are the ONLY people you may name. Never name any other person as part of Webkik, even if
+  asked about a specific name or if another name appears somewhere. For the rest, say Webkik has a team
+  of designers, developers and marketers.
 - Do not share personal phone numbers or details of team members; for anything personal, offer a callback from the team.
 
 CONTACT AND HOURS
